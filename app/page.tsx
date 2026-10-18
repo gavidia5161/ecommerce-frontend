@@ -1,69 +1,165 @@
+import { Suspense } from "react";
+import Link from "next/link";
 import Image from "next/image";
 
-export default function Home() {
+type Product = {
+  id: number;
+  name: string;
+  description: string;
+  price: string;
+  stock: number;
+};
+
+async function getProducts(): Promise<Product[]> {
+  const baseUrl = process.env.BASE_URL;
+
+  if (!baseUrl) {
+    throw new Error("Falta configurar BASE_URL en .env.local");
+  }
+
+  const response = await fetch(`${baseUrl}/products`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudieron cargar los productos");
+  }
+
+  return response.json();
+}
+
+function ProductsSkeleton() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-80 animate-pulse rounded-2xl bg-zinc-200"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      ))}
     </div>
+  );
+}
+
+async function ProductList({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const products = await getProducts();
+  const { page } = await searchParams;
+  const pageSize = 6;
+  const pageCount = Math.max(1, Math.ceil(products.length / pageSize));
+  const parsedPage = Number(page ?? "1");
+  const currentPage =
+    Number.isInteger(parsedPage) && parsedPage > 0
+      ? Math.min(parsedPage, pageCount)
+      : 1;
+  const visibleProducts = products.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
+  return (
+    <>
+    {visibleProducts.length === 0 ? (
+      <p className="rounded-2xl border border-zinc-200 bg-white p-8 text-zinc-600">
+        No hay productos disponibles por el momento.
+      </p>
+    ) : (
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {visibleProducts.map((product) => (
+        <article
+          key={product.id}
+          className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+        >
+          <Link href={`/products/${product.id}`} className="block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600">
+            <div className="mb-5 flex h-36 items-center justify-center rounded-xl bg-zinc-100">
+              <Image
+                src="/product-placeholder.svg"
+                alt=""
+                width={192}
+                height={144}
+                className="h-32 w-40 object-contain"
+              />
+            </div>
+
+            <h2 className="text-xl font-semibold">{product.name}</h2>
+
+            <p className="mt-2 min-h-12 text-sm text-zinc-600">
+              {product.description}
+            </p>
+          </Link>
+
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <span className="text-2xl font-bold">
+              ${Number(product.price).toFixed(2)}
+            </span>
+
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                product.stock > 0
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-red-100 text-red-800"
+              }`}
+            >
+              {product.stock > 0 ? "Disponible" : "Agotado"}
+            </span>
+          </div>
+
+          <Link
+            href={`/products/${product.id}`}
+            className="mt-5 inline-flex font-semibold text-indigo-700 hover:text-indigo-900"
+          >
+            Ver producto <span aria-hidden="true" className="ml-1">→</span>
+          </Link>
+        </article>
+      ))}
+    </div>
+    )}
+    {pageCount > 1 && (
+      <nav aria-label="Páginas del catálogo" className="mt-8 flex items-center justify-center gap-5">
+        {currentPage > 1 ? (
+          <Link href={`/?page=${currentPage - 1}`} className="font-semibold text-indigo-700">
+            ← Anterior
+          </Link>
+        ) : <span className="text-zinc-400">← Anterior</span>}
+        <span className="text-sm text-zinc-600">Página {currentPage} de {pageCount}</span>
+        {currentPage < pageCount ? (
+          <Link href={`/?page=${currentPage + 1}`} className="font-semibold text-indigo-700">
+            Siguiente →
+          </Link>
+        ) : <span className="text-zinc-400">Siguiente →</span>}
+      </nav>
+    )}
+    </>
+  );
+}
+
+export default function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  return (
+    <main className="min-h-screen bg-zinc-50 px-6 py-12 text-zinc-900">
+      <header className="mx-auto mb-10 max-w-6xl">
+        <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
+          Nuestra tienda
+        </p>
+        <h1 className="mt-2 text-4xl font-bold tracking-tight">
+          Catálogo de productos
+        </h1>
+        <p className="mt-3 text-zinc-600">
+          Productos cargados desde nuestra API de Laravel.
+        </p>
+      </header>
+
+      <section className="mx-auto max-w-6xl">
+        <Suspense fallback={<ProductsSkeleton />}>
+          <ProductList searchParams={searchParams} />
+        </Suspense>
+      </section>
+    </main>
   );
 }
